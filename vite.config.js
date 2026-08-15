@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const photosDir = path.join(__dirname, 'src', 'photos')
-const tagsFile = path.join(__dirname, 'photo-tags.json')
+// Lives inside src/photos (not extension-matched by the gallery's image
+// glob) so it rides on the same volume mount as the uploaded photos.
+const tagsFile = path.join(photosDir, '.photo-tags.json')
 const allowedExt = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'])
 
 // Server-side tag store (keep/discard), shared by every client that hits
@@ -26,6 +28,7 @@ async function loadTags() {
 }
 
 async function saveTags() {
+  await mkdir(photosDir, { recursive: true })
   await writeFile(tagsFile, JSON.stringify(tagsCache, null, 2))
 }
 
