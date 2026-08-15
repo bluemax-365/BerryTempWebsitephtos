@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import JSZip from 'jszip'
 
 const photoModules = import.meta.glob('./photos/*.{png,jpg,jpeg,webp,gif,svg,PNG,JPG,JPEG,WEBP,GIF,SVG}', {
   eager: true,
@@ -30,7 +31,7 @@ const FILTERS = [
   { id: 'discard', label: 'Discard' },
 ]
 
-function PhotoCard({ photo, tag, onTag, onDelete }) {
+function PhotoCard({ photo, tag, onTag, onDelete, onOpen }) {
   return (
     <div className="glass group flex flex-col overflow-hidden rounded-2xl transition-transform duration-300 hover:-translate-y-1">
       <div className="relative aspect-square overflow-hidden bg-black/30">
@@ -38,7 +39,8 @@ function PhotoCard({ photo, tag, onTag, onDelete }) {
           src={photo.url}
           alt={photo.name}
           loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          onClick={() => onOpen(photo)}
+          className="h-full w-full cursor-zoom-in object-cover transition-transform duration-500 group-hover:scale-105"
         />
         <button
           type="button"
@@ -98,10 +100,51 @@ function PhotoCard({ photo, tag, onTag, onDelete }) {
   )
 }
 
+function Lightbox({ photo, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose()
+    document.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+        className="glass absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full text-white/80 hover:text-white"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+      <img
+        src={photo.url}
+        alt={photo.name}
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[90vh] max-w-[90vw] rounded-xl object-contain shadow-2xl"
+      />
+      <p className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/40 px-3 py-1 text-sm text-white/70 backdrop-blur-md">
+        {photo.name}
+      </p>
+    </div>
+  )
+}
+
 export default function App() {
   const [tags, setTags] = useState(loadTags)
+  const [lightboxPhoto, setLightboxPhoto] = useState(null)
   const [filter, setFilter] = useState('all')
   const [uploading, setUploading] = useState(0)
+  const [zipping, setZipping] = useState(false)
   const [error, setError] = useState('')
   const fileInputRef = useRef(null)
 
@@ -153,6 +196,33 @@ export default function App() {
       setTag(photo.id, null)
     } catch (err) {
       setError(`Failed to delete ${photo.name}: ${err.message}`)
+    }
+  }
+
+  const handleDownloadKeep = async () => {
+    const kept = photos.filter((p) => tags[p.id] === 'keep')
+    if (kept.length === 0) return
+
+    setError('')
+    setZipping(true)
+    try {
+      const zip = new JSZip()
+      for (const photo of kept) {
+        const res = await fetch(photo.url)
+        if (!res.ok) throw new Error(`Failed to fetch ${photo.name}`)
+        zip.file(photo.name, await res.blob())
+      }
+      const blob = await zip.generateAsync({ type: 'blob' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'keep-photos.zip'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(`Failed to build zip: ${err.message}`)
+    } finally {
+      setZipping(false)
     }
   }
 
@@ -223,6 +293,14 @@ export default function App() {
               >
                 {uploading > 0 ? `Uploading ${uploading}…` : 'Upload'}
               </button>
+              <button
+                type="button"
+                onClick={handleDownloadKeep}
+                disabled={zipping || counts.keep === 0}
+                className="rounded-full bg-emerald-400/90 px-4 py-1.5 text-sm font-medium text-emerald-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
+              >
+                {zipping ? 'Zipping…' : `Download Keep (${counts.keep})`}
+              </button>
             </nav>
           </div>
 
@@ -255,11 +333,14 @@ export default function App() {
                 tag={tags[photo.id]}
                 onTag={setTag}
                 onDelete={handleDelete}
+                onOpen={setLightboxPhoto}
               />
             ))}
           </div>
         )}
       </div>
+
+      {lightboxPhoto && <Lightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} />}
     </div>
   )
 }
