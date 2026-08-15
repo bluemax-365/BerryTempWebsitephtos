@@ -10,7 +10,10 @@
       "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 5183 -State Listen | Select-Object -ExpandProperty OwningProcess -Unique\")",
       "Bash(powershell -Command \"Stop-Process -Id 69456 -Force\")",
       "Bash(printf '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"><rect width=\"10\" height=\"10\" fill=\"red\"/></svg>' > /tmp/curl-test.svg *)",
-      "Bash(docker build *)"
+      "Bash(docker build *)",
+      "Bash(netstat -ano)",
+      "Bash(tasklist //FI \"PID eq 7388\")",
+      "Bash(taskkill //PID 7388 //F)"
     ],
     "additionalDirectories": [
       "\\tmp"

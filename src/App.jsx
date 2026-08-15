@@ -14,16 +14,6 @@ const photos = Object.entries(photoModules)
   }))
   .sort((a, b) => a.name.localeCompare(b.name))
 
-const STORAGE_KEY = 'gallery-tags'
-
-function loadTags() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) ?? {}
-  } catch {
-    return {}
-  }
-}
-
 const FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'unset', label: 'Untagged' },
@@ -74,7 +64,7 @@ function PhotoCard({ photo, tag, onTag, onDelete, onOpen }) {
         <div className="mt-auto flex gap-2">
           <button
             type="button"
-            onClick={() => onTag(photo.id, tag === 'keep' ? null : 'keep')}
+            onClick={() => onTag(photo.name, tag === 'keep' ? null : 'keep')}
             className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
               tag === 'keep'
                 ? 'bg-emerald-400/90 text-emerald-950'
@@ -85,7 +75,7 @@ function PhotoCard({ photo, tag, onTag, onDelete, onOpen }) {
           </button>
           <button
             type="button"
-            onClick={() => onTag(photo.id, tag === 'discard' ? null : 'discard')}
+            onClick={() => onTag(photo.name, tag === 'discard' ? null : 'discard')}
             className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
               tag === 'discard'
                 ? 'bg-rose-400/90 text-rose-950'
@@ -140,7 +130,7 @@ function Lightbox({ photo, onClose }) {
 }
 
 export default function App() {
-  const [tags, setTags] = useState(loadTags)
+  const [tags, setTags] = useState({})
   const [lightboxPhoto, setLightboxPhoto] = useState(null)
   const [filter, setFilter] = useState('all')
   const [uploading, setUploading] = useState(0)
@@ -149,16 +139,31 @@ export default function App() {
   const fileInputRef = useRef(null)
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(tags))
-  }, [tags])
+    fetch('/api/tags')
+      .then((res) => (res.ok ? res.json() : {}))
+      .then(setTags)
+      .catch(() => setError('Failed to load saved tags'))
+  }, [])
 
-  const setTag = (id, value) => {
+  // Tags are keyed by filename and persisted server-side, so Keep/Discard
+  // choices are shared by everyone who opens the gallery, not just this browser.
+  const setTag = async (name, value) => {
     setTags((prev) => {
       const next = { ...prev }
-      if (value) next[id] = value
-      else delete next[id]
+      if (value) next[name] = value
+      else delete next[name]
       return next
     })
+    try {
+      const res = await fetch(`/api/tags/${encodeURIComponent(name)}`, {
+        method: value ? 'PUT' : 'DELETE',
+        headers: value ? { 'Content-Type': 'application/json' } : undefined,
+        body: value ? JSON.stringify({ tag: value }) : undefined,
+      })
+      if (!res.ok) throw new Error(await res.text())
+    } catch (err) {
+      setError(`Failed to save tag for ${name}: ${err.message}`)
+    }
   }
 
   const handleUpload = async (event) => {
@@ -193,14 +198,18 @@ export default function App() {
         method: 'DELETE',
       })
       if (!res.ok && res.status !== 404) throw new Error(await res.text())
-      setTag(photo.id, null)
+      setTags((prev) => {
+        const next = { ...prev }
+        delete next[photo.name]
+        return next
+      })
     } catch (err) {
       setError(`Failed to delete ${photo.name}: ${err.message}`)
     }
   }
 
   const handleDownloadKeep = async () => {
-    const kept = photos.filter((p) => tags[p.id] === 'keep')
+    const kept = photos.filter((p) => tags[p.name] === 'keep')
     if (kept.length === 0) return
 
     setError('')
@@ -234,8 +243,8 @@ export default function App() {
 
   const visible = useMemo(() => {
     if (filter === 'all') return photos
-    if (filter === 'unset') return photos.filter((p) => !tags[p.id])
-    return photos.filter((p) => tags[p.id] === filter)
+    if (filter === 'unset') return photos.filter((p) => !tags[p.name])
+    return photos.filter((p) => tags[p.name] === filter)
   }, [filter, tags])
 
   return (
@@ -330,7 +339,7 @@ export default function App() {
               <PhotoCard
                 key={photo.id}
                 photo={photo}
-                tag={tags[photo.id]}
+                tag={tags[photo.name]}
                 onTag={setTag}
                 onDelete={handleDelete}
                 onOpen={setLightboxPhoto}
