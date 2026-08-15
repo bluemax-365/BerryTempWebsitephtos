@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npm create vite@latest . -- --template react -y 2>&1)",
+      "PowerShell(npm create vite@latest temp-scaffold -- --template react 2>&1)",
+      "PowerShell(Move-Item -Destination .)",
+      "PowerShell(Remove-Item temp-scaffold -Recurse -Force -Confirm:$false)",
+      "PowerShell(npm install 2>&1)",
+      "PowerShell(npm install tailwindcss @tailwindcss/vite 2>&1)",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 5183 -State Listen | Select-Object -ExpandProperty OwningProcess -Unique\")",
+      "Bash(powershell -Command \"Stop-Process -Id 69456 -Force\")",
+      "Bash(printf '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"10\"><rect width=\"10\" height=\"10\" fill=\"red\"/></svg>' > /tmp/curl-test.svg *)",
+      "Bash(docker build *)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
+    ]
+  }
+}
